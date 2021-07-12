@@ -5,11 +5,13 @@ import androidx.core.content.ContextCompat;
 
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.GridView;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -41,8 +43,10 @@ public class MainActivity extends AppCompatActivity {
     Double time = 0.0;
     boolean timerStarted = false;
 
-
+    //counting cards for game logic
     private int countPair = 0;
+    private int cardsOpen = 0;
+    private TextView mScore;
 
     //create integer array for id of each image item
     int[] drawable = new int[]{
@@ -62,6 +66,11 @@ public class MainActivity extends AppCompatActivity {
     //set current position to -1 at start of game; so it won't overlap with the above positions
     int currentPosition = -1;
 
+    //use this to prevent false clicking
+    private long mLastClickTime = 0;
+
+    //pause screen
+    private ImageButton mPauseScreen;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,7 +89,15 @@ public class MainActivity extends AppCompatActivity {
 
         //PROGRESS BAR : connect up xml elements for progress bar and text view using variables declared above so android knows what you're using
         mProgressBar = (ProgressBar) findViewById(R.id.ProgressBar);
-        mLoadingText = (TextView) findViewById(R.id.GameCompletionStatus);
+        mProgressBar.setVisibility(View.INVISIBLE);
+
+        //score is invisible at first
+        mScore = (TextView) findViewById(R.id.Score);
+        mScore.setVisibility(View.INVISIBLE);
+
+        //attributes for pause screen
+        mPauseScreen = (ImageButton) findViewById(R.id.pauseScreen);
+        mPauseScreen.setVisibility(View.INVISIBLE);
 
         gridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
 
@@ -88,38 +105,54 @@ public class MainActivity extends AppCompatActivity {
             public void onItemClick(AdapterView<?> parent, View view, int pos, long id) {
 
                 if (currentPosition < 0) {
+                    //prevent false clicking for 1 second after every 2 cards are selected
+                    long currentClickTime = SystemClock.uptimeMillis();
+                    long elapsedTime = currentClickTime - mLastClickTime;
+                    mLastClickTime = currentClickTime;
+                    if (elapsedTime <= 1000) {
+                        return;
+                    }
+
                     currentPosition = pos;
                     currentView = (ImageView) view;
                     currentView.setImageResource(drawable[position[pos]]);
+                    cardsOpen = 1;
                 }
 
                 else {
                     if (currentPosition == pos) {
-                        currentView.setImageResource(R.drawable.ic_back);
+                        //don't allow double clicking of the same card
+                        return;
                     }
-                    else if (position[currentPosition] != position[pos]) {
+
+                    cardsOpen = 2;
+                    if (position[currentPosition] != position[pos]) {
                         ((ImageView) view).setImageResource(drawable[position[pos]]); //show both cards for a while
                         Toast toast = Toast.makeText(getApplicationContext(), "Not a match", Toast.LENGTH_SHORT);
                         toast.setGravity(0, 0, 0);
                         toast.show();
+
                         //after showing both unmatched cards for 0.5second, flip both back
-                        Handler handler = new Handler();
-                        handler.postDelayed(new Runnable() {
+                        ((ImageView) view).postDelayed(new Runnable() {
                             @Override
                             public void run() {
                                 currentView.setImageResource(R.drawable.ic_back);
                                 ((ImageView) view).setImageResource(R.drawable.ic_back);
                             }
-                        }, 500);
+                        }, 1000);
                     }
-                    else {
+                    else if (position[currentPosition] == position[pos] && cardsOpen == 2){
                         currentView.setImageResource(drawable[position[pos]]);
                         ((ImageView) view).setImageResource(drawable[position[pos]]);
                         countPair++;
+                        //display score
+                        mScore.setText(countPair + " of 6 matches");
+                        mScore.setVisibility(View.VISIBLE);
+
                         //PROGRESS BAR increases by 17 with every match
                         mProgressStatus += 17;
                         mProgressBar.setProgress(mProgressStatus);
-                        mLoadingText.setVisibility(View.VISIBLE);
+                        mProgressBar.setVisibility(View.VISIBLE);
 
                         //Toast to let user know it's a match
                         Toast toast1 = Toast.makeText(getApplicationContext(), "Matched!", Toast.LENGTH_SHORT);
@@ -127,14 +160,13 @@ public class MainActivity extends AppCompatActivity {
                         toast1.show();
 
                         //after showing both matched cards for 0.5second, matched cards disappear
-                        Handler handler = new Handler();
-                        handler.postDelayed(new Runnable() {
+                        ((ImageView) view).postDelayed(new Runnable() {
                             @Override
                             public void run() {
                                 currentView.setVisibility(View.INVISIBLE);
                                 ((ImageView) view).setVisibility(View.INVISIBLE);
                             }
-                        }, 500);
+                        }, 1000);
 
                         if(countPair == 6) {
                             Toast toast2 = Toast.makeText(getApplicationContext(), "YOU WIN!", Toast.LENGTH_LONG);
@@ -147,6 +179,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                     currentPosition = -1;
+                    cardsOpen = 0;
                 }
             }
         });
@@ -160,19 +193,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void pauseTapped(View view) {
+        GridView gv = findViewById(R.id.gridView);
+
         if (timerStarted == false) {
             timerStarted = true;
             pauseBtn.setText("PAUSE");
             pauseBtn.setTextColor(ContextCompat.getColor(this, R.color.black));
 
             startTimer();
+
+            //remove pause screen
+            mPauseScreen.setVisibility(View.INVISIBLE);
+            pauseBtn.setVisibility(View.VISIBLE);
         }
         else {
             timerStarted = false;
-            pauseBtn.setText("CONTINUE");
-            pauseBtn.setTextColor(ContextCompat.getColor(this, R.color.teal_700));
 
             timerTask.cancel();
+
+            //display pause screen
+            mPauseScreen.setVisibility(View.VISIBLE);
+            pauseBtn.setVisibility(View.INVISIBLE);
         }
     }
 
